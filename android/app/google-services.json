@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "159451731176",
+    "project_id": "fir-modul6-acc71",
+    "storage_bucket": "fir-modul6-acc71.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:159451731176:android:bbec0f4cdf5e14ab1fa55d",
+        "android_client_info": {
+          "package_name": "com.example.kostkontrakanmod5"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBC33R8xKa6X2wcJJX8vkclkjPyWC83R9U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
