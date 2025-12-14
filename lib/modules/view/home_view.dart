@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../service/settings_service.dart';
 import '../controller/home_controller.dart';
-import '../controller/note_controller.dart';
+import 'detail_kost_view.dart';
 
 class HomeView extends GetView<HomeController> {
   const HomeView({super.key});
@@ -12,85 +12,212 @@ class HomeView extends GetView<HomeController> {
   @override
   Widget build(BuildContext context) {
     final SettingsService settings = Get.find<SettingsService>();
+    final isDark = settings.isDarkMode.value;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text('pkukostkontrakan'),
-        backgroundColor: Colors.indigo,
+        elevation: 0,
+        backgroundColor: Theme.of(context).cardColor,
+        title: Text(
+          'pkukostkontrakan',
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.indigo,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
+        ),
         actions: [
           Obx(() => IconButton(
-                icon: Icon(settings.isDarkMode.value
-                    ? Icons.light_mode
-                    : Icons.dark_mode),
+                icon: Icon(
+                  settings.isDarkMode.value
+                      ? Icons.light_mode
+                      : Icons.dark_mode_outlined,
+                  color: settings.isDarkMode.value
+                      ? Colors.amber
+                      : Colors.grey[700],
+                ),
                 onPressed: () => controller.toggleTheme(),
               )),
           IconButton(
-              icon: Icon(Icons.logout), onPressed: () => controller.logout()),
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            onPressed: () => controller.logout(),
+          ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildExperimentControls(),
-            SizedBox(height: 10),
-            _buildMapSection(),
-            SizedBox(height: 10),
-            Divider(thickness: 2),
-            Obx(() => Text(
-                  'Status: ${controller.experimentLog.value}',
-                  style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
-                )),
-            Expanded(
-              child: Obx(() {
-                if (controller.isLoading.value) {
-                  return Center(child: CircularProgressIndicator());
-                }
-                if (controller.locationList.isEmpty) {
-                  return Center(
-                      child: Text(
-                          'Cari alamat di atas atau aktifkan Live Location.'));
-                }
-                return ListView.builder(
-                  itemCount: controller.locationList.length,
-                  itemBuilder: (context, index) {
+      // --- PERUBAHAN UTAMA: MENGGUNAKAN CUSTOMSCROLLVIEW ---
+      body: CustomScrollView(
+        slivers: [
+          // 1. BAGIAN ATAS (SEARCH, MAP, LOG) -> Scrollable Header
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius:
+                    const BorderRadius.vertical(bottom: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5))
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildModernSearchBar(context, settings),
+                  const SizedBox(height: 16),
+                  _buildMapSection(), // Map Original
+                  const SizedBox(height: 8),
+                  _buildStatusLog(settings),
+                ],
+              ),
+            ),
+          ),
+
+          // 2. JARAK ANTARA HEADER DAN GRID
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+          // 3. BAGIAN GRID HASIL PENCARIAN
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: Obx(() {
+              if (controller.isLoading.value) {
+                return const SliverToBoxAdapter(
+                    child: Center(child: CircularProgressIndicator()));
+              }
+              if (controller.locationList.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Column(
+                    children: [
+                      Icon(Icons.location_searching,
+                          size: 50, color: Colors.grey.withOpacity(0.5)),
+                      const SizedBox(height: 10),
+                      Text('Belum ada data kost.',
+                          style: TextStyle(color: Colors.grey[500])),
+                    ],
+                  ),
+                );
+              }
+
+              // --- PERUBAHAN GRID: TAMPILAN 2 KOLOM ---
+              return SliverGrid(
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2, // 2 Item per baris (Lebih kecil)
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio:
+                      0.75, // Mengatur rasio tinggi vs lebar kartu
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
                     final location = controller.locationList[index];
-                    return Card(
-                      elevation: 2,
-                      margin: EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: Icon(Icons.place, color: Colors.indigo),
-                        title: Text(location.displayName),
-                        subtitle: Text('${location.lat}, ${location.lon}'),
-                        onTap: () {
-                          Get.defaultDialog(
-                              title: "Simpan Favorit?",
-                              middleText: "Simpan lokasi ini ke database?",
-                              textConfirm: "Ya",
-                              textCancel: "Batal",
-                              onConfirm: () {
-                                final favController =
-                                    Get.put(FavoritesController());
-                                favController.addToFavorites(location);
-                                Get.back();
-                              });
-                        },
+                    final randomImg =
+                        "https://picsum.photos/id/${index + 50}/300/300";
+
+                    return GestureDetector(
+                      onTap: () =>
+                          Get.to(() => DetailKostView(location: location)),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black
+                                    .withOpacity(isDark ? 0.3 : 0.05),
+                                blurRadius: 5,
+                                offset: const Offset(0, 2))
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Gambar (Ukuran disesuaikan grid)
+                            Expanded(
+                              flex: 5,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                    top: Radius.circular(12)),
+                                child: Image.network(
+                                  randomImg,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (c, e, s) =>
+                                      Container(color: Colors.grey[300]),
+                                ),
+                              ),
+                            ),
+                            // Info Text
+                            Expanded(
+                              flex: 4,
+                              child: Padding(
+                                padding: const EdgeInsets.all(10.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          location.displayName.split(",")[0],
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            const Icon(Icons.star,
+                                                size: 10, color: Colors.amber),
+                                            const Text(" 4.5",
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    const Text(
+                                      "Rp 850rb/bln",
+                                      style: TextStyle(
+                                          color: Colors.indigo,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
-                );
-              }),
-            ),
-          ],
-        ),
+                  childCount: controller.locationList.length,
+                ),
+              );
+            }),
+          ),
+
+          // Padding bawah agar bisa scroll mentok
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
+        ],
       ),
     );
   }
 
+  // --- WIDGET MAP (ORIGINAL VERSION - TETAP DIPERTAHANKAN) ---
   Widget _buildMapSection() {
     return Container(
-      height: 280,
+      height: 250, // Tinggi map disesuaikan sedikit
       decoration: BoxDecoration(
         border: Border.all(color: Colors.indigo),
         borderRadius: BorderRadius.circular(8),
@@ -99,7 +226,7 @@ class HomeView extends GetView<HomeController> {
         children: [
           FlutterMap(
             mapController: controller.mapController,
-            options: MapOptions(
+            options: const MapOptions(
               initialCenter: LatLng(-7.98, 112.62),
               initialZoom: 13.0,
             ),
@@ -117,7 +244,6 @@ class HomeView extends GetView<HomeController> {
                           width: 60,
                           height: 60,
                           child: Icon(Icons.my_location,
-                              // Warna merah jika GPS, Biru jika Network
                               color: controller.activeProvider.value == 'GPS'
                                   ? Colors.red
                                   : Colors.blue,
@@ -127,44 +253,38 @@ class HomeView extends GetView<HomeController> {
                   )),
             ],
           ),
-
-          // B. Panel Data & Tombol (Di Bawah)
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
               color: Colors.black.withOpacity(0.7),
-              padding: EdgeInsets.all(8),
+              padding: const EdgeInsets.all(8),
               child: Column(
                 children: [
-                  // Data Display
                   Obx(() => Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           Text(
                               "Lat: ${controller.currentLat.value.toStringAsFixed(4)}",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 11)),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 11)),
                           Text(
                               "Lon: ${controller.currentLong.value.toStringAsFixed(4)}",
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 11)),
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 11)),
                           Text(
                               "Acc: ${controller.accuracy.value.toStringAsFixed(0)}m",
-                              style: TextStyle(
+                              style: const TextStyle(
                                   color: Colors.yellow, fontSize: 11)),
                         ],
                       )),
-                  SizedBox(height: 6),
-
-                  // DUA TOMBOL PILIHAN PROVIDER
+                  const SizedBox(height: 6),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      // Tombol 1: GPS Provider
                       Obx(() => ElevatedButton.icon(
-                            icon: Icon(Icons.satellite_alt, size: 14),
+                            icon: const Icon(Icons.satellite_alt, size: 14),
                             label: Text(controller.activeProvider.value == 'GPS'
                                 ? "Stop GPS"
                                 : "GPS (High)"),
@@ -174,16 +294,14 @@ class HomeView extends GetView<HomeController> {
                                       ? Colors.red
                                       : Colors.grey[800],
                               foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 5),
-                              minimumSize: Size(100, 30),
+                              minimumSize: const Size(80, 30),
                             ),
                             onPressed: () => controller.startGPSMode(),
                           )),
-
-                      // Tombol 2: Network Provider
                       Obx(() => ElevatedButton.icon(
-                            icon: Icon(Icons.wifi, size: 14),
+                            icon: const Icon(Icons.wifi, size: 14),
                             label: Text(
                                 controller.activeProvider.value == 'NETWORK'
                                     ? "Stop Net"
@@ -194,9 +312,9 @@ class HomeView extends GetView<HomeController> {
                                       ? Colors.blue
                                       : Colors.grey[800],
                               foregroundColor: Colors.white,
-                              padding: EdgeInsets.symmetric(
+                              padding: const EdgeInsets.symmetric(
                                   horizontal: 10, vertical: 5),
-                              minimumSize: Size(100, 30),
+                              minimumSize: const Size(80, 30),
                             ),
                             onPressed: () => controller.startNetworkMode(),
                           )),
@@ -211,33 +329,85 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildExperimentControls() {
-    return Column(
+  // --- WIDGET SEARCH ---
+  Widget _buildModernSearchBar(BuildContext context, SettingsService settings) {
+    final isDark = settings.isDarkMode.value;
+    final fillColor = isDark ? Colors.grey[800] : Colors.grey[100];
+    final hintColor = isDark ? Colors.grey[400] : Colors.grey;
+
+    return Row(
       children: [
-        TextField(
-          controller: controller.searchController,
-          decoration: InputDecoration(
-            labelText: 'Cari Alamat Kost',
-            hintText: 'Misal: Kost UMM',
-            isDense: true, // Biar lebih ramping
-            border: OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: Icon(Icons.search),
-              onPressed: controller.searchWithHttp,
+        Expanded(
+          child: Container(
+            height: 45,
+            decoration: BoxDecoration(
+              color: fillColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: TextField(
+              controller: controller.searchController,
+              decoration: InputDecoration(
+                hintText: 'Cari Kost...',
+                hintStyle: TextStyle(color: hintColor, fontSize: 14),
+                prefixIcon: const Icon(Icons.search_rounded,
+                    color: Colors.indigo, size: 20),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              onSubmitted: (_) => controller.searchWithHttp(),
             ),
           ),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton(
-                onPressed: controller.searchWithHttp,
-                child: Text("Cari (HTTP)")),
-            TextButton(
-                onPressed: controller.goToNotes, child: Text("Lihat Favorit")),
-          ],
-        )
+        const SizedBox(width: 8),
+        InkWell(
+          onTap: controller.goToNotes,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 45,
+            height: 45,
+            decoration: BoxDecoration(
+              color: Colors.indigo,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.favorite_rounded,
+                color: Colors.white, size: 20),
+          ),
+        ),
       ],
     );
+  }
+
+  // --- WIDGET LOG ---
+  Widget _buildStatusLog(SettingsService settings) {
+    return Obx(() {
+      final isDark = settings.isDarkMode.value;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.orange.withOpacity(0.2)
+              : Colors.orange.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.info_outline_rounded,
+                size: 12, color: Colors.orange),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                controller.experimentLog.value,
+                style: TextStyle(
+                    color: isDark ? Colors.orangeAccent : Colors.orange[900],
+                    fontSize: 11,
+                    fontStyle: FontStyle.italic),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }
